@@ -48,9 +48,19 @@ class BenchmarkReporter {
       cpu_accumulated_time(0),
       bytes_per_second(0),
       items_per_second(0),
-      max_heapbytes_used(0) {}
+      max_heapbytes_used(0),
+      min_time(0.0),
+      arg1(0),
+      arg2(0),
+      threads(0),
+      has_arg1(false),
+      has_arg2(false),
+      use_real_time(false),
+      use_manual_time(false),
+      multithreaded(false) {}
 
     std::string benchmark_name;
+    std::string benchmark_family;
     std::string report_label;  // Empty if not set by benchmark.
     int64_t iterations;
     TimeUnit time_unit;
@@ -63,6 +73,17 @@ class BenchmarkReporter {
 
     // This is set to 0.0 if memory tracing is not enabled.
     double max_heapbytes_used;
+    double min_time;
+
+    int arg1;
+    int arg2;
+    int threads;
+
+    bool has_arg1;
+    bool has_arg2;
+    bool use_real_time;
+    bool use_manual_time;
+    bool multithreaded;
   };
 
   // Called once for every suite of benchmarks run.
@@ -122,6 +143,42 @@ public:
 
 private:
   void PrintRunData(const Run& report);
+};
+
+class HTMLReporter : public BenchmarkReporter {
+ public:
+  virtual bool ReportContext(const Context& context);
+  virtual void ReportRuns(const std::vector<Run>& reports);
+  virtual void Finalize();
+
+  struct RunData {
+    int64_t iterations;
+    double real_time;
+    double cpu_time;
+
+    double bytes_second;
+    double items_second;
+    int range_x;
+  };
+
+  struct BenchmarkData {
+    std::string name;
+    std::vector<RunData> run_data;
+  };
+
+ private:
+  void WriteFile(const std::string& file) const;
+  std::string ReplaceHTMLSpecialChars(const std::string& label) const;
+
+  void PrintHTML(std::ostream& out, const std::string& html) const;
+
+  void AppendRunDataTo(std::vector<BenchmarkData> *container, const Run &data, bool is_stddev) const;
+
+  std::string context_output;
+  std::vector<BenchmarkData> benchmark_tests_line;
+  std::vector<BenchmarkData> benchmark_tests_line_stddev;
+  std::vector<BenchmarkData> benchmark_tests_bar;
+  std::vector<BenchmarkData> benchmark_tests_bar_stddev;
 };
 
 } // end namespace benchmark

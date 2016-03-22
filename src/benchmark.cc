@@ -31,6 +31,7 @@
 #include <memory>
 #include <thread>
 
+#include "benchmark_util.h"
 #include "check.h"
 #include "commandlineflags.h"
 #include "log.h"
@@ -66,7 +67,7 @@ DEFINE_int32(benchmark_repetitions, 1,
 
 DEFINE_string(benchmark_format, "console",
               "The format to use for console output. Valid values are "
-              "'console', 'json', or 'csv'.");
+              "'console', 'json', 'csv', or 'html'.");
 
 DEFINE_bool(color_print, true, "Enables colorized logging.");
 
@@ -95,10 +96,6 @@ GetBenchmarkLock()
 }
 
 namespace {
-
-bool IsZero(double n) {
-    return std::abs(n) < std::numeric_limits<double>::epsilon();
-}
 
 // For non-dense Range, intermediate values are powers of kRangeMultiplier.
 static const int kRangeMultiplier = 8;
@@ -281,6 +278,7 @@ namespace internal {
 // Information kept per benchmark we may want to run
 struct Benchmark::Instance {
   std::string    name;
+  std::string    family;
   Benchmark*     benchmark;
   bool           has_arg1;
   int            arg1;
@@ -400,7 +398,12 @@ bool BenchmarkFamilies::FindBenchmarks(
       for (int num_threads : *thread_counts) {
 
         Benchmark::Instance instance;
-        instance.name = family->name_;
+        instance.name = GenerateInstanceName(
+            family->name_, family->arg_count_, args.first, args.second,
+            family->min_time_, family->use_real_time_,
+            !(family->thread_counts_.empty()), num_threads,
+            family->use_manual_time_);
+        instance.family = family->name_;
         instance.benchmark = bench_family.get();
         instance.has_arg1 = family->arg_count_ >= 1;
         instance.arg1 = args.first;
@@ -413,27 +416,6 @@ bool BenchmarkFamilies::FindBenchmarks(
         instance.use_manual_time = family->use_manual_time_;
         instance.threads = num_threads;
         instance.multithreaded = !(family->thread_counts_.empty());
-
-        // Add arguments to instance name
-        if (family->arg_count_ >= 1) {
-          AppendHumanReadable(instance.arg1, &instance.name);
-        }
-        if (family->arg_count_ >= 2) {
-          AppendHumanReadable(instance.arg2, &instance.name);
-        }
-        if (!IsZero(family->min_time_)) {
-          instance.name +=  StringPrintF("/min_time:%0.3f",  family->min_time_);
-        }
-        if (family->use_manual_time_) {
-          instance.name +=  "/manual_time";
-        } else if (family->use_real_time_) {
-          instance.name +=  "/real_time";
-        }
-
-        // Add the number of threads used to the name
-        if (!family->thread_counts_.empty()) {
-          instance.name += StringPrintF("/threads:%d", instance.threads);
-        }
 
         if (re.Match(instance.name)) {
           benchmarks->push_back(instance);
@@ -769,6 +751,7 @@ void RunBenchmark(const benchmark::internal::Benchmark::Instance& b,
         // Create report about this benchmark run.
         BenchmarkReporter::Run report;
         report.benchmark_name = b.name;
+        report.benchmark_family = b.family;
         report.report_label = label;
         // Report the total iterations across all threads.
         report.iterations = static_cast<int64_t>(iters) * b.threads;
@@ -781,6 +764,15 @@ void RunBenchmark(const benchmark::internal::Benchmark::Instance& b,
         report.cpu_accumulated_time = cpu_accumulated_time;
         report.bytes_per_second = bytes_per_second;
         report.items_per_second = items_per_second;
+        report.has_arg1 = b.has_arg1;
+        report.has_arg2 = b.has_arg2;
+        report.arg1     = b.arg1;
+        report.arg2     = b.arg2;
+        report.use_real_time = b.use_real_time;
+        report.use_manual_time = b.use_manual_time;
+        report.min_time = b.min_time;
+        report.threads = b.threads;
+        report.multithreaded = b.multithreaded;
         reports.push_back(report);
         break;
       }
@@ -904,6 +896,8 @@ std::unique_ptr<BenchmarkReporter> GetDefaultReporter() {
     return PtrType(new JSONReporter);
   } else if (FLAGS_benchmark_format == "csv") {
     return PtrType(new CSVReporter);
+  } else if (FLAGS_benchmark_format == "html") {
+    return PtrType(new HTMLReporter());
   } else {
     std::cerr << "Unexpected format: '" << FLAGS_benchmark_format << "'\n";
     std::exit(1);
@@ -944,7 +938,7 @@ void PrintUsageAndExit() {
           "          [--benchmark_filter=<regex>]\n"
           "          [--benchmark_min_time=<min_time>]\n"
           "          [--benchmark_repetitions=<num_repetitions>]\n"
-          "          [--benchmark_format=<console|json|csv>]\n"
+          "          [--benchmark_format=<console|json|csv|html>]\n"
           "          [--color_print={true|false}]\n"
           "          [--v=<verbosity>]\n");
   exit(0);
@@ -978,7 +972,8 @@ void ParseCommandLineFlags(int* argc, char** argv) {
 
   if (FLAGS_benchmark_format != "console" &&
       FLAGS_benchmark_format != "json" &&
-      FLAGS_benchmark_format != "csv") {
+      FLAGS_benchmark_format != "csv" &&
+      FLAGS_benchmark_format != "html") {
     PrintUsageAndExit();
   }
 }
