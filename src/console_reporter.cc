@@ -100,20 +100,27 @@ void ConsoleReporter::PrintRunData(const Run& result) {
   ColorPrintf(COLOR_GREEN, "%-*s ",
               name_field_width_, result.benchmark_name.c_str());
 
+  auto&& auto_format_printf = [&timeLabel](LogColor color, double value) {
+    char fmt[] = "%10.0f %s ";
+    if (value < 1) {
+      fmt[4] = '4';
+    } else if (value < 10) {
+      fmt[4] = '3';
+    } else if (value < 100) {
+      fmt[4] = '2';
+    } else if (value < 1000) {
+      fmt[4] = '1';
+    }
+    ColorPrintf(color, fmt, value, timeLabel);
+  };
   if (result.iterations == 0) {
-    ColorPrintf(COLOR_YELLOW, "%10.0f %s %10.0f %s ",
-                result.real_accumulated_time * multiplier,
-                timeLabel,
-                result.cpu_accumulated_time * multiplier,
-                timeLabel);
+    auto_format_printf(COLOR_YELLOW, result.real_accumulated_time * multiplier);
+    auto_format_printf(COLOR_YELLOW, result.cpu_accumulated_time * multiplier);
   } else {
-    ColorPrintf(COLOR_YELLOW, "%10.0f %s %10.0f %s ",
-                (result.real_accumulated_time * multiplier) /
-                    (static_cast<double>(result.iterations)),
-                timeLabel,
-                (result.cpu_accumulated_time * multiplier) /
-                    (static_cast<double>(result.iterations)),
-                timeLabel);
+    auto_format_printf(COLOR_YELLOW,
+                       result.real_accumulated_time * multiplier / result.iterations);
+    auto_format_printf(COLOR_YELLOW,
+                       result.cpu_accumulated_time * multiplier / result.iterations);
   }
 
   ColorPrintf(COLOR_CYAN, "%10lld", result.iterations);
