@@ -255,6 +255,21 @@ public:
     return res;
   }
 
+#if __cplusplus >= 201103L
+  template <typename F> void Run(F&& fun) {
+    assert(!started_);
+    started_ = true;
+    const auto max = max_iterations;
+    ResumeTiming();
+    for (auto i = max; i; --i) {
+      fun();
+    }
+    PauseTiming();
+    // Total iterations now is one greater than max iterations. Fix this.
+    total_iterations_ = max_iterations;
+  }
+#endif
+
   // REQUIRES: timer is running
   // Stop the benchmark timer.  If not called, the timer will be
   // automatically stopped after KeepRunning() returns false for the first time.
