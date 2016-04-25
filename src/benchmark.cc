@@ -102,7 +102,7 @@ bool IsZero(double n) {
 
 // For non-dense Range, intermediate values are powers of kRangeMultiplier.
 static const int kRangeMultiplier = 8;
-static const size_t kMaxIterations = 1000000000;
+static const size_t kMaxIterations = 4000000000u;
 
 bool running_benchmark = false;
 
@@ -723,7 +723,7 @@ void RunBenchmark(const benchmark::internal::Benchmark::Instance& b,
         next_iters = kMaxIterations;
       }
       VLOG(3) << "Next iters: " << next_iters << ", " << multiplier << "\n";
-      iters = static_cast<int>(next_iters + 0.5);
+      iters = static_cast<size_t>(next_iters + 0.5);
     }
   }
   br->ReportRuns(reports);
