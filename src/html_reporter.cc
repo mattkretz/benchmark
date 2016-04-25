@@ -3,122 +3,127 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
-#include <iostream>
-#include <functional>
 #include <fstream>
+#include <functional>
+#include <iostream>
+#include <sstream>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "benchmark_util.h"
 #include "walltime.h"
 
-static const char *const benchmark_titles[4] = {
-    "CPU time", "Items per second", "Real time", "Bytes per second"};
-
-static const char *const yaxis_titles[4] = {
-    "CPU time [ns]", "Items per second [items/s]", "Real time [ns]",
-    "Bytes per second [B/s]"};
-
-static const char *const line_tool_tip_bodies[4] = {
-    "Calculated values: <b>{point.key}</b><br/>CPU time: <b>{point.y} "
-    "ns</b><br/>Argument 1: <b>{point.x}</b>",
-    "Calculated values: <b>{point.key}</b><br/>Items per second: "
-    "<b>{point.y}</b><br/>Argument 1: <b>{point.x}</b>",
-    "Calculated values: <b>{point.key}</b><br/>Real time: <b>{point.y} "
-    "ns</b><br/>Argument 1: <b>{point.x}</b>",
-    "Calculated values: <b>{point.key}</b><br/>Bytes per second: "
-    "<b>{point.y}</b><br/>Argument 1: <b>{point.x}</b>"};
-
-static const char *const column_tool_tip_bodies[4] = {
-    "CPU time: <b>{point.y} ns</b>", "Items per second: <b>{point.y}</b>",
-    "Real time: <b>{point.y} ns</b>", "Bytes per second: <b>{point.y}</b>"};
-
 static const char *const high_chart_bar_function =
-    "                $('#${BENCHMARK_ID}').highcharts({\n"
-    "                    chart: {\n"
-    "                        type: 'column',\n"
-    "                        zoomType: 'xy'\n"
-    "                    },\n"
-    "                    title: {\n"
-    "                        text: '${BENCHMARK_NAME}'\n"
-    "                    },\n"
-    "                    legend: {\n"
-    "                         enabled: false\n"
-    "                    },\n"
-    "                    xAxis: {\n"
-    "                        categories:[\n${CATEGORIES}"
-    "                    ]},\n"
-    "                    yAxis: {\n"
-    "                        title: {\n"
-    "                            text: '${YAXIS_TITLE}'\n"
-    "                        },\n  "
-    "                        allowDecimals: true\n"
-    "                    },\n"
-    "                    plotOptions: {"
-    "                        series: { colorByPoint: true }"
-    "                    },"
-    "                    tooltip: {\n"
-    "                        headerFormat: '${TOOLTIP_HEADER}',\n"
-    "                        pointFormat: '${TOOLTIP_BODY}',\n"
-    "                        borderWidth: 5\n"
-    "                    },\n"
-    "                    scrollbar: {\n"
-    "                        enabled: false\n"
-    "                    },\n"
-    "                   series:[\n${SERIES}"
-    "                   ]\n"
-    "                });\n${CHART}";
+    "\n$('#${BENCHMARK_ID}').highcharts({"
+    "\n  chart: {"
+    "\n    type: 'column',"
+    "\n    zoomType: 'xy'"
+    "\n  },"
+    "\n  title: {"
+    "\n    text: '${BENCHMARK_NAME}'"
+    "\n  },"
+    "\n  legend: {"
+    "\n    enabled: false"
+    "\n  },"
+    "\n  xAxis: { type: 'category' },"
+    "\n  yAxis: {"
+    "\n    title: {"
+    "\n      text: '${BENCHMARK_NAME} [${UNIT}]'"
+    "\n    },"
+    "\n    allowDecimals: true"
+    "\n  },"
+    "\n  plotOptions: {"
+    "\n    column: { colorByPoint: true }"
+    "\n   ,errorbar: {"
+    "\n      tooltip: {"
+    "\n        shared: true"
+    "\n       ,valueDecimals: 3"
+    "\n       ,pointFormat: ' (<small>stddev:</small> {point.low} – {point.high})'"
+    "\n      }"
+    "\n    }"
+    "\n  },"
+    "\n  tooltip: {"
+    "\n    shared: true"
+    "\n   ,useHTML: true"
+    "\n   ,valueDecimals: 3"
+    "\n   ,headerFormat: '<small>{point.key}</small>'"
+    "\n   ,pointFormat: '<br/><span style=\"color: "
+    "{series.color}\">{series.name}:</span> <b>{point.y}</b>'"
+    "\n   ,valueSuffix: ' ${UNIT}'"
+    "\n  },"
+    "\n  scrollbar: {"
+    "\n    enabled: true"
+    "\n  },"
+    "\n  series:[${SERIES}]"
+    "\n});"
+    "${CHART}";
 
 static const char *const high_chart_line_function =
-    "                $('#${BENCHMARK_ID}').highcharts({\n"
-    "                    chart: {\n"
-    "                        type: 'line',\n"
-    "                        zoomType: 'xy'\n"
-    "                    },\n"
-    "                    title: {\n"
-    "                        text: '${BENCHMARK_NAME}'\n"
-    "                    },\n"
-    "                    legend: {\n"
-    "                         align: 'right',\n"
-    "                         verticalAlign: 'top',\n"
-    "                         layout: 'vertical'\n"
-    "                    },\n"
-    "                    xAxis: {\n"
-    "                        title: {\n"
-    "                              text: 'Argument 1',\n"
-    "                              enabled: true\n"
-    "                        },\n"
-    "                        allowDecimals: true\n"
-    "                    },\n"
-    "                    yAxis: {\n"
-    "                        title: {\n"
-    "                            text: '${YAXIS_TITLE}'\n"
-    "                        },\n  "
-    "                        allowDecimals: true\n"
-    "                    },\n"
-    "                    tooltip: {\n"
-    "                        headerFormat: '${TOOLTIP_HEADER}',\n"
-    "                        pointFormat: '${TOOLTIP_BODY}',\n"
-    "                        borderWidth: 5\n"
-    "                    },\n"
-    "                    scrollbar: {\n"
-    "                        enabled: true\n"
-    "                    },\n"
-    "                    navigator: {\n"
-    "                        enabled: true\n"
-    "                    },\n"
-    "                    plotOptions: {\n"
-    "                        line: {\n"
-    "                          marker: {\n"
-    "                              enabled: true,\n"
-    "                              radius: 3\n"
-    "                          },\n"
-    "                          lineWidth: 1\n"
-    "                        }\n"
-    "                    },\n"
-    "                   series:[\n${SERIES}"
-    "                   ]\n"
-    "                });\n${CHART}";
+    "\n$('#${BENCHMARK_ID}').highcharts({"
+    "\n  chart: {"
+    "\n    type: 'line',"
+    "\n    zoomType: 'xy'"
+    "\n  },"
+    "\n  title: {"
+    "\n    text: '${BENCHMARK_NAME}'"
+    "\n  },"
+    "\n  legend: {"
+    "\n    align: 'right',"
+    "\n    verticalAlign: 'top',"
+    "\n    layout: 'vertical'"
+    "\n  },"
+    "\n  xAxis: {"
+    "\n    title: {"
+    "\n      text: 'Argument 1',"
+    "\n      enabled: true"
+    "\n    },"
+    "\n    allowDecimals: true"
+    "\n  },"
+    "\n  yAxis: {"
+    "\n    min: 0,"
+    "\n    title: {"
+    "\n      text: '${BENCHMARK_NAME} [${UNIT}]'"
+    "\n    },"
+    "\n    allowDecimals: true"
+    "\n  },"
+    "\n  tooltip: {"
+    "\n    shared: true"
+    "\n   ,useHTML: true"
+    "\n   ,valueDecimals: 3"
+    "\n   ,headerFormat: '<small>{point.key}</small><table><tr>'"
+    "\n   ,pointFormat: '</tr><tr>"
+    "<td style=\"color: {series.color}\">{series.name}:</td>"
+    "<td style=\"text-align:right\"><b>{point.y}</b></td>'"
+    "\n   ,footerFormat: '</tr></table>'"
+    "\n   ,valueSuffix: ' ${UNIT}'"
+    "\n  },"
+    "\n  scrollbar: {"
+    "\n    enabled: true"
+    "\n  },"
+    "\n  navigator: {"
+    "\n    enabled: true"
+    "\n  },"
+    "\n  plotOptions: {"
+    "\n    errorbar: {"
+    "\n      tooltip: {"
+    "\n        shared: true"
+    "\n       ,useHTML: true"
+    "\n       ,valueDecimals: 3"
+    "\n       ,pointFormat: '<td>(<small>stddev:</small> {point.low} – {point.high})</td>'"
+    "\n      }"
+    "\n    }"
+    "\n   ,line: {"
+    "\n      marker: {"
+    "\n        enabled: true,"
+    "\n        radius: 3"
+    "\n      },"
+    "\n      lineWidth: 1"
+    "\n    }"
+    "\n  },"
+    "\n  series:[${SERIES}]"
+    "\n});"
+    "${CHART}";
 
 static const char *const div_element =
     "      <div class = \"chart\" id = \"${DIV_NAME}\"></div>\n${DIV}";
@@ -128,10 +133,10 @@ static const char *const html_base =
     "<html>\n"
     "   <head>\n"
     "       <meta charset = \"UTF-8\"/>\n"
-    "       <title>Benchmark</title>\n"
+    "       <title>${TITLE}</title>\n"
     "       <style type = \"text/css\">\n"
     "           .chart{\n"
-    "                height:400px;\n"
+    "                height:700px;\n"
     "           }\n"
     "       </style>\n"
     "@CMAKE_JAVASCRIPT_REPLACEMENT@"
@@ -149,277 +154,268 @@ static const char *const html_base =
 
 namespace benchmark {
 namespace {
-void ReplaceString(std::string *input, const std::string &from,
-                   const std::string &to) {
-  size_t position = input->find(from);
-
-  if (position != std::string::npos) {
-    input->replace(position, from.size(), to);
-  }
+std::string ReplaceTags(
+    std::string boilerplate,
+    const std::unordered_map<std::string, std::string> &replacements) {
+    size_t pos = 0;
+    while (std::string::npos != (pos = boilerplate.find("${", pos))) {
+      if (pos + 3 >= boilerplate.size()) {
+        break;
+      }
+      const size_t end = boilerplate.find('}', pos + 2);
+      if (end == std::string::npos) {
+        break;
+      }
+      const auto &key = boilerplate.substr(pos + 2, end - pos - 2);
+      const auto &it = replacements.find(key);
+      if (it == replacements.end()) {
+        std::clog << "WARN: No replacement for HTML template '" << key
+                  << "'. Skipping.\n";
+        pos = end + 1;
+        continue;
+      }
+      boilerplate.replace(pos, end - pos + 1, it->second);
+      pos += it->second.size();
+    }
+    return std::move(boilerplate);
 }
 
-template <typename T>
-std::function<std::string(const HTMLReporter::RunData &,
-                          const HTMLReporter::RunData &)>
-GenerateErrorbarCallable(T HTMLReporter::RunData::*member) {
-  return [member](const HTMLReporter::RunData &mean,
-                  const HTMLReporter::RunData &stddev) -> std::string {
-    T biggerVal = (mean.*member + stddev.*member);
-    T shorterVal = (mean.*member - stddev.*member);
-
-    return std::to_string(biggerVal) + ',' + std::to_string(shorterVal);
-  };
-}
+using Run = BenchmarkReporter::Run;
 
 struct ChartIt {
-  std::string (*value)(const HTMLReporter::RunData &);
-  std::function<std::string(const HTMLReporter::RunData &,
-                            const HTMLReporter::RunData &)> error;
+  const char *const chart_title;
+  const char *const unit;
+  bool (*is_valid)(const Run &);
+  std::string (*value)(const Run &);
+  std::function<std::string(const Run &, const Run &)> error;
 };
 
-void OutputAllLineCharts(
-    std::string &output, const std::array<ChartIt, 4> &line_charts,
-    const std::vector<HTMLReporter::BenchmarkData> &benchmark_tests_line,
-    const std::vector<HTMLReporter::BenchmarkData>
-        &benchmark_tests_line_stddev) {
-  const char *benchmark_id[] = {
-      "Benchmark_TimeInCpu_Line", "Benchmark_ItemsPerSec_Line",
-      "Benchmark_TimeInReal_Line", "Benchmark_BytesPerSec_Line"};
-  std::string series;
-  std::string chart(high_chart_line_function);
+static double fixup_time(double accumulated_seconds, double iterations) {
+  constexpr double nano_sec_multiplier = 1e9;
+  const double r = accumulated_seconds * nano_sec_multiplier;
+  return iterations >= 2 ? r / iterations : r;
+}
+static const std::array<ChartIt, HTMLReporter::NumberOfPresentations> charts = {
+    {{"Real time", "ns",
+      [](const Run &mean) { return mean.real_accumulated_time > 0; },
+      [](const Run &mean) {
+        return std::to_string(
+            fixup_time(mean.real_accumulated_time, mean.iterations));
+      },
+      [](const Run &mean, const Run &stddev) {
+        const double value =
+            fixup_time(mean.real_accumulated_time, mean.iterations);
+        const double deviation =
+            fixup_time(stddev.real_accumulated_time, stddev.iterations);
+        return std::to_string(value - deviation) + ',' +
+               std::to_string(value + deviation);
+      }},
+     {"CPU time", "ns",
+      [](const Run &mean) { return mean.cpu_accumulated_time > 0; },
+      [](const Run &mean) {
+        return std::to_string(
+            fixup_time(mean.cpu_accumulated_time, mean.iterations));
+      },
+      [](const Run &mean, const Run &stddev) {
+        const double value =
+            fixup_time(mean.cpu_accumulated_time, mean.iterations);
+        const double deviation =
+            fixup_time(stddev.cpu_accumulated_time, stddev.iterations);
+        return std::to_string(value - deviation) + ',' +
+               std::to_string(value + deviation);
+      }},
+     {"Items per second", "items/s",
+      [](const Run &mean) { return mean.items_per_second > 0; },
+      [](const Run &mean) { return std::to_string(mean.items_per_second); },
+      [](const Run &mean, const Run &stddev) {
+        const double value = mean.items_per_second;
+        const double deviation = stddev.items_per_second;
+        return std::to_string(value - deviation) + ',' +
+               std::to_string(value + deviation);
+      }},
+     {"Bytes per second", "B/s",
+      [](const Run &mean) { return mean.bytes_per_second > 0; },
+      [](const Run &mean) { return std::to_string(mean.bytes_per_second); },
+      [](const Run &mean, const Run &stddev) {
+        const double value = mean.bytes_per_second;
+        const double deviation = stddev.bytes_per_second;
+        return std::to_string(value - deviation) + ',' +
+               std::to_string(value + deviation);
+      }}}};
 
-  for (size_t chart_num = 0; chart_num < 4; chart_num++) {
-    for (size_t n = 0; n < benchmark_tests_line.size(); n++) {
-      if (n > 0) {
-        series.append(",");
-      }
-
-      series.append("{name: '")
-          .append(benchmark_tests_line[n].name)
-          .append("',\ndata: [");
-      for (size_t m = 0; m < benchmark_tests_line[n].run_data.size(); m++) {
-        if (m > 0) {
-          series.append(",");
-        }
-        series.append("[")
-            .append(std::to_string(benchmark_tests_line[n].run_data[m].range_x))
-            .append(",");
-        series.append(
-            line_charts[chart_num].value(benchmark_tests_line[n].run_data[m]));
-        series.append("]");
-      }
-      series.append("]}");
-
-      if (!benchmark_tests_line_stddev.empty()) {
-        series.append(
-            ",\n{type: 'errorbar',\nenableMouseTracking: false,\ndata: [");
-        for (size_t m = 0; m < benchmark_tests_line[n].run_data.size(); m++) {
-          if (m > 0) {
-            series.append(",");
-          }
-          series.append("[")
-              .append(
-                  std::to_string(benchmark_tests_line[n].run_data[m].range_x))
-              .append(",")
-              .append(line_charts[chart_num].error(
-                  benchmark_tests_line[n].run_data[m],
-                  benchmark_tests_line_stddev[n].run_data[m]));
-          series.append("]");
-        }
-        series.append("]}\n");
-      }
-    }
-
-    series.append("\n");
-
-    ReplaceString(&chart, "${YAXIS_TITLE}", yaxis_titles[chart_num]);
-    ReplaceString(&chart, "${TOOLTIP_BODY}", line_tool_tip_bodies[chart_num]);
-    ReplaceString(&chart, "${BENCHMARK_ID}", benchmark_id[chart_num]);
-    ReplaceString(&chart, "${BENCHMARK_NAME}", benchmark_titles[chart_num]);
-    ReplaceString(&chart, "${TOOLTIP_HEADER}",
-                  "<b><center>{series.name}</center></b><br/>");
-    ReplaceString(&chart, "${SERIES}", series);
-
-    ReplaceString(&output, "${CHART}", chart);
-    ReplaceString(&output, "${DIV}", div_element);
-    ReplaceString(&output, "${DIV_NAME}", benchmark_id[chart_num]);
-
-    series.clear();
-    chart.assign(high_chart_line_function);
-  }
+HTMLReporter::Presentation &operator++(HTMLReporter::Presentation &p) {
+  return p = static_cast<HTMLReporter::Presentation>(p + 1);
+}
+HTMLReporter::Presentation next(HTMLReporter::Presentation p) {
+  return static_cast<HTMLReporter::Presentation>(p + 1);
 }
 
-void OutputAllBarCharts(
-    std::string &output, const std::array<ChartIt, 4> &bar_charts,
-    const std::vector<HTMLReporter::BenchmarkData> &benchmark_tests_bar,
-    const std::vector<HTMLReporter::BenchmarkData>
-        &benchmark_tests_bar_stddev) {
-  const char *benchmark_id[] = {
-      "Benchmark_TimeInCpu_Bar", "Benchmark_ItemsPerSec_Bar",
-      "Benchmark_TimeInReal_Bar", "Benchmark_BytesPerSec_Bar"};
-  std::string chart(high_chart_bar_function);
-  std::string div(div_element);
-  std::string categories("");
-  std::string series("");
-
-  for (size_t chart_num = 0; chart_num < 4; chart_num++) {
-    if (benchmark_tests_bar.size() > 0) {
-      categories + "'" + benchmark_tests_bar[0].name + "'";
-
-      for (size_t n = 1; n < benchmark_tests_bar.size(); n++) {
-        categories + ", '" + benchmark_tests_bar[n].name + "'";
-      }
-    }
-
-    series.append("{name: 'Benchmark',\ndata: [\n");
-    for (size_t n = 0; n < benchmark_tests_bar.size(); n++) {
-      if (n > 0) {
-        series.append(",");
-      }
-      series.append("['")
-          .append(benchmark_tests_bar[n].name)
-          .append("',")
-          .append(
-              bar_charts[chart_num].value(benchmark_tests_bar[n].run_data[0]))
-          .append("]");
-    }
-
-    series.append("]}");
-    if (!benchmark_tests_bar_stddev.empty()) {
-      series.append(
-          ",\n{type: 'errorbar',\nenableMouseTracking: false,\ndata: [");
-      for (size_t n = 0; n < benchmark_tests_bar_stddev.size(); n++) {
-        if (n > 0) {
-          series.append(",");
-        }
-        series.append("[")
-            .append(bar_charts[chart_num].error(
-                benchmark_tests_bar[n].run_data[0],
-                benchmark_tests_bar_stddev[n].run_data[0]))
-            .append("]");
-      }
-      series.append("]}");
-    }
-    series.append("\n");
-
-    ReplaceString(&chart, "${YAXIS_TITLE}", yaxis_titles[chart_num]);
-    ReplaceString(&chart, "${TOOLTIP_BODY}", column_tool_tip_bodies[chart_num]);
-    ReplaceString(&chart, "${TOOLTIP_HEADER}",
-                  "<b><center>{point.key}</center></b><br/>");
-    ReplaceString(&div, "${DIV_NAME}", benchmark_id[chart_num]);
-    ReplaceString(&chart, "${BENCHMARK_ID}", benchmark_id[chart_num]);
-    ReplaceString(&chart, "${BENCHMARK_NAME}", benchmark_titles[chart_num]);
-    ReplaceString(&chart, "${CATEGORIES}", categories);
-    ReplaceString(&chart, "${SERIES}", series);
-    ReplaceString(&output, "${CHART}", chart);
-    ReplaceString(&output, "${DIV}", div);
-
-    categories.clear();
-    series.clear();
-    chart.assign(high_chart_bar_function);
-    div.assign(div_element);
+std::string ReadFile(const std::string &file) {
+  if (file.empty()) {
+    return {};
   }
+  std::fstream fin(file);
+  const auto start = fin.tellg();
+  fin.seekg(0, std::ios::end);
+  const auto length = fin.tellg() - start;
+  fin.seekg(start);
+  std::string r;
+  r.resize(length, ' ');
+  fin.read(&*r.begin(), length);
+  fin.close();
+  return r;
 }
 }
 
 bool HTMLReporter::ReportContext(const Context &context) {
-  context_output.append("<span>")
-      .append("Run on (")
-      .append(std::to_string(context.num_cpus))
-      .append(" X ")
-      .append(std::to_string(context.mhz_per_cpu));
-  context_output.append(" MHz CPU")
-      .append(((context.num_cpus > 1) ? "s" : ""))
-      .append(")<br/>");
-  context_output.append(LocalDateTimeString()).append("</span>");
-
+  std::ostringstream stream;
+  stream << "<div>Run on (" << context.num_cpus << " X " << context.mhz_per_cpu
+         << " MHz CPU" << ((context.num_cpus > 1) ? "s" : "") << ")<br/>"
+         << LocalDateTimeString() << "<br/>";
   if (context.cpu_scaling_enabled) {
+    stream << "CPU scaling was enabled. The benchmark real time measurements "
+              "may be noisy and with extra overhead.<br/>";
     std::cerr << "***WARNING*** CPU scaling is enabled, the benchmark "
                  "real time measurements may be noisy and will incur extra "
                  "overhead.\n";
   }
 
 #ifndef NDEBUG
+  stream << "The benchmark library was built in Debug mode. Timings may be "
+            "affected.<br/>";
   std::cerr << "***WARNING*** Library was built as DEBUG. Timings may be "
                "affected.\n";
 #endif
+  stream << "</div>";
+  context_output = stream.str();
   return true;
 }
 
 void HTMLReporter::ReportRuns(std::vector<Run> const &reports) {
-  std::vector<BenchmarkData> *benchmark_tests = nullptr;
-  std::vector<BenchmarkData> *benchmark_tests_stddev = nullptr;
-
   if (reports[0].has_arg2) {
     std::clog << "Warning for Benchmark \"" << reports[0].benchmark_name
               << "\": 3D plotting is not implemented! Data will be plotted as "
-                 "a chart bar.\n";
+                 "a bar chart.\n";
+  }
+  const Run *run = &reports[0];
+  const bool need_stddev = reports.size() > 1;
+  const bool is_barchart = reports[0].has_arg2 || !reports[0].has_arg1;
+  const std::string &caption =
+      is_barchart ? ReplaceHTMLSpecialChars(run->benchmark_name)
+                  : GenerateInstanceName(
+                        ReplaceHTMLSpecialChars(run->benchmark_family), 0, 0, 0,
+                        run->min_time, run->use_real_time, run->multithreaded,
+                        run->threads, run->use_manual_time);
+  ChartData *const chart_data_array =
+      is_barchart ? barcharts : linecharts[caption];
+  Run mean, run_stddev;
+  if (need_stddev) {
+    // we need to plot the mean and stddev of all the values in reports
+    BenchmarkReporter::ComputeStats(reports, &mean, &run_stddev);
+    run = &mean;
   }
 
-  // Check if bar or line
-  if (reports[0].has_arg1 && !reports[0].has_arg2) {
-    benchmark_tests = &benchmark_tests_line;
-    benchmark_tests_stddev = &benchmark_tests_line_stddev;
-  } else {
-    benchmark_tests = &benchmark_tests_bar;
-    benchmark_tests_stddev = &benchmark_tests_bar_stddev;
+  for (Presentation i = FirstPresentation; i < NumberOfPresentations; ++i) {
+    ChartData &chart_data = chart_data_array[i];
+    if (!charts[i].is_valid(*run)) {
+      continue;
+    }
+    std::stringstream values;
+    std::string &stddev = chart_data.stddev;
+    values << ",[";
+    if (need_stddev) {
+      stddev.append(",[");
+    }
+    const auto &x_string =
+        is_barchart ? '\'' + caption + '\'' : std::to_string(reports[0].arg1);
+    values << x_string << ',' << charts[i].value(*run) << ']';
+    chart_data.values.append(values.str());
+    if (need_stddev) {
+      stddev.append(x_string)
+          .append(1, ',')
+          .append(charts[i].error(*run, run_stddev))
+          .append(1, ']');
+    }
   }
+}
 
-  Run report_data = reports[0];
-
-  if (reports.size() >= 2) {
-    Run stddev_data = reports[0];
-    BenchmarkReporter::ComputeStats(reports, &report_data, &stddev_data);
-
-    AppendRunDataTo(benchmark_tests_stddev, stddev_data, true);
+HTMLReporter::ChartOutput HTMLReporter::LineChartOutput(
+    Presentation p) {
+  if (p == NumberOfPresentations) {
+    return BarChartOutput(FirstPresentation);
   }
+  ChartOutput next_output = LineChartOutput(next(p));
+  std::stringstream concat;
+  for (const auto &data : linecharts) {
+    const std::string &name = data.first;
+    const ChartData &chart_data = data.second[p];
+    if (chart_data.values.empty()) {
+      return next_output;
+    }
+    concat << ",{name: '" << name << "', data: ["
+           << chart_data.values.substr(1);  // drop the initial comma
+    if (!chart_data.stddev.empty()) {
+      concat << "]}, {"
+                "\n  type: 'errorbar'"
+                "\n ,data: ["
+             << chart_data.stddev.substr(1);  // drop the initial comma
+    }
+    concat << "]}";
+  }
+  if (concat.tellp() == 0) {
+    return next_output;
+  }
+  const auto &div_id = std::string("linechart") + std::to_string(p);
+  return {ReplaceTags(high_chart_line_function,
+                      {{"BENCHMARK_ID", div_id},
+                       {"BENCHMARK_NAME", charts[p].chart_title},
+                       {"CHART", next_output.chart},
+                       {"SERIES", concat.str().substr(1)},
+                       {"UNIT", charts[p].unit}}),
+          ReplaceTags(div_element,
+                      {{"DIV_NAME", div_id}, {"DIV", next_output.div}})};
+}
 
-  AppendRunDataTo(benchmark_tests, report_data, false);
+HTMLReporter::ChartOutput HTMLReporter::BarChartOutput(
+    Presentation p) {
+  if (p == NumberOfPresentations) {
+    return {{}, {}};
+  }
+  ChartOutput next_output = BarChartOutput(next(p));
+  const ChartData &chart_data = barcharts[p];
+  if (chart_data.values.empty()) {
+    return next_output;
+  }
+  const auto &div_id = std::string("barchart") + std::to_string(p);
+  return {
+      ReplaceTags(
+          high_chart_bar_function,
+          {{"BENCHMARK_ID", div_id},
+           {"BENCHMARK_NAME", charts[p].chart_title},
+           {"CHART", next_output.chart},
+           {"SERIES",
+            std::string("{name: '") + charts[p].chart_title + "', data: [" +
+                chart_data.values.substr(1)  // drop the initial comma
+                + (chart_data.stddev.empty()
+                       ? "]}"
+                       : ("]},\n{type: 'errorbar', data: [" +
+                          chart_data.stddev.substr(1)  // drop the initial comma
+                          + "]}"))},
+           {"UNIT", charts[p].unit}}),
+      ReplaceTags(div_element,
+                  {{"DIV_NAME", div_id}, {"DIV", next_output.div}})};
 }
 
 void HTMLReporter::Finalize() {
-  std::string output(html_base);
-  const std::array<ChartIt, 4> charts = {
-      {ChartIt{
-           [](const RunData &mean) { return std::to_string(mean.cpu_time); },
-           GenerateErrorbarCallable(&RunData::cpu_time)},
-       ChartIt{[](const RunData &mean) {
-                 return std::to_string(mean.items_second);
-               },
-               GenerateErrorbarCallable(&RunData::items_second)},
-       ChartIt{
-           [](const RunData &mean) { return std::to_string(mean.real_time); },
-           GenerateErrorbarCallable(&RunData::real_time)},
-       ChartIt{[](const RunData &mean) {
-                 return std::to_string(mean.bytes_second);
-               },
-               GenerateErrorbarCallable(&RunData::bytes_second)}}};
-
-  OutputAllLineCharts(output, charts, benchmark_tests_line,
-                      benchmark_tests_line_stddev);
-  OutputAllBarCharts(output, charts, benchmark_tests_bar,
-                     benchmark_tests_bar_stddev);
-
-  ReplaceString(&output, "${CONTEXT}", context_output);
-  ReplaceString(&output, "${CHART}", "");
-  ReplaceString(&output, "${DIV}", "");
-
-  PrintHTML(std::cout, output);
-}
-
-void HTMLReporter::WriteFile(const std::string &file) const {
-  std::fstream fin;
-  char buffer[256];
-
-  fin.open(file);
-  if (fin.is_open()) {
-    do {
-      fin.read(buffer, 256);
-      std::cout.write(buffer, fin.gcount());
-    } while (fin.gcount() > 0);
-
-    fin.close();
-  }
+  const ChartOutput &output = LineChartOutput(FirstPresentation);
+  std::cout << ReplaceTags(
+      html_base, {{"CHART", output.chart},
+                  {"CONTEXT", context_output},
+                  {"DIV", output.div},
+                  {"HIGHCHART_MORE", ReadFile("@CMAKE_HIGHSTOCK_MORE_PATH@")},
+                  {"HIGHCHART", ReadFile("@CMAKE_HIGHSTOCK_PATH@")},
+                  {"JQUERY", ReadFile("@CMAKE_JQUERY_PATH@")},
+                  {"TITLE", "Benchmark"}});
 }
 
 std::string HTMLReporter::ReplaceHTMLSpecialChars(
@@ -445,82 +441,5 @@ std::string HTMLReporter::ReplaceHTMLSpecialChars(
   }
 
   return new_label;
-}
-
-void HTMLReporter::PrintHTML(std::ostream &out, const std::string &html) const {
-  size_t marker_pos = html.find("${JQUERY}");
-  size_t string_pos = 0;
-
-  if (marker_pos != std::string::npos) {
-    out.write(html.c_str(), marker_pos);
-    WriteFile("@CMAKE_JQUERY_PATH@");
-    string_pos = (marker_pos + 9);
-  }
-
-  marker_pos = html.find("${HIGHCHART}", marker_pos);
-
-  if (marker_pos != std::string::npos) {
-    out.write((html.c_str() + string_pos), (marker_pos - string_pos));
-    WriteFile("@CMAKE_HIGHSTOCK_PATH@");
-    string_pos = (marker_pos + 12);
-  }
-
-  marker_pos = html.find("${HIGHCHART_MORE}", marker_pos);
-
-  if (marker_pos != std::string::npos) {
-    out.write((html.c_str() + string_pos), (marker_pos - string_pos));
-    WriteFile("@CMAKE_HIGHSTOCK_MORE_PATH@");
-    string_pos = (marker_pos + 17);
-  }
-
-  out << (html.c_str() + string_pos);
-}
-
-void HTMLReporter::AppendRunDataTo(std::vector<BenchmarkData> *container,
-                                   const Run &data, bool isStddev) const {
-  std::string data_name("");
-
-  if (data.has_arg1 && !data.has_arg2) {
-    data_name = benchmark::GenerateInstanceName(
-        ReplaceHTMLSpecialChars(data.benchmark_family), 0, 0, 0, data.min_time,
-        data.use_real_time, data.multithreaded, data.threads,
-        data.use_manual_time);
-
-    if (isStddev) {
-      data_name.append("_stddev");
-    }
-  } else {
-    data_name = ReplaceHTMLSpecialChars(data.benchmark_name);
-  }
-
-  RunData run_data;
-  double const nano_sec_multiplier = 1e9;
-  run_data.iterations = data.iterations;
-  run_data.bytes_second = data.bytes_per_second;
-  run_data.items_second = data.items_per_second;
-  run_data.range_x = data.arg1;
-  run_data.real_time = (data.real_accumulated_time * nano_sec_multiplier);
-  run_data.cpu_time = (data.cpu_accumulated_time * nano_sec_multiplier);
-
-  if (data.iterations > 1) {
-    run_data.real_time /= static_cast<double>(data.iterations);
-    run_data.cpu_time /= static_cast<double>(data.iterations);
-  }
-
-  std::vector<BenchmarkData>::iterator iter =
-      find_if(container->begin(), container->end(),
-              [&data_name](const BenchmarkData &value) {
-                return value.name == data_name;
-              });
-
-  if (iter == container->end()) {
-    BenchmarkData benchmark_data;
-
-    benchmark_data.name = std::move(data_name);
-    benchmark_data.run_data.push_back(run_data);
-    container->push_back(benchmark_data);
-  } else {
-    iter->run_data.push_back(run_data);
-  }
 }
 }  // end namespace benchmark

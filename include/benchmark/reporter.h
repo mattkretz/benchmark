@@ -14,6 +14,7 @@
 #ifndef BENCHMARK_REPORTER_H_
 #define BENCHMARK_REPORTER_H_
 
+#include <map>
 #include <string>
 #include <utility>
 #include <vector>
@@ -166,19 +167,31 @@ class HTMLReporter : public BenchmarkReporter {
     std::vector<RunData> run_data;
   };
 
+  enum Presentation {
+    RealTime = 0,
+    CpuTime,
+    ItemsPerSecond,
+    BytesPerSecond,
+    NumberOfPresentations,
+    FirstPresentation = 0
+  };
+
  private:
-  void WriteFile(const std::string& file) const;
+  struct ChartOutput {
+    std::string chart, div;
+  };
+  ChartOutput LineChartOutput(Presentation p);
+  ChartOutput BarChartOutput(Presentation p);
   std::string ReplaceHTMLSpecialChars(const std::string& label) const;
 
-  void PrintHTML(std::ostream& out, const std::string& html) const;
-
-  void AppendRunDataTo(std::vector<BenchmarkData> *container, const Run &data, bool is_stddev) const;
-
   std::string context_output;
-  std::vector<BenchmarkData> benchmark_tests_line;
-  std::vector<BenchmarkData> benchmark_tests_line_stddev;
-  std::vector<BenchmarkData> benchmark_tests_bar;
-  std::vector<BenchmarkData> benchmark_tests_bar_stddev;
+
+  struct ChartData {
+    std::string values;
+    std::string stddev;
+  };
+  ChartData barcharts[NumberOfPresentations];
+  std::map<std::string, ChartData[NumberOfPresentations]> linecharts;
 };
 
 } // end namespace benchmark

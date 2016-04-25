@@ -47,6 +47,9 @@ set_target_properties(cxx03_test
     PROPERTIES COMPILE_FLAGS "${CXX03_FLAGS}")
 add_test(cxx03 cxx03_test --benchmark_min_time=0.01)
 
+compile_benchmark_test(html_test)
+add_test(html html_test)
+
 # Add the coverage command(s)
 if(CMAKE_BUILD_TYPE)
   string(TOLOWER ${CMAKE_BUILD_TYPE} CMAKE_BUILD_TYPE_LOWER)
