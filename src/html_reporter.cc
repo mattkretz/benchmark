@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "benchmark_util.h"
+#include "javascript_includes.h"
 #include "walltime.h"
 
 static const char *const high_chart_bar_function =
@@ -139,7 +140,7 @@ static const char *const html_base =
     "                height:700px;\n"
     "           }\n"
     "       </style>\n"
-    "@CMAKE_JAVASCRIPT_REPLACEMENT@"
+    "${JAVASCRIPT_REPLACEMENTS}"
     "       <script>\n"
     "            $(function () {\n"
     "${CHART}"
@@ -250,20 +251,40 @@ HTMLReporter::Presentation next(HTMLReporter::Presentation p) {
   return static_cast<HTMLReporter::Presentation>(p + 1);
 }
 
-std::string ReadFile(const std::string &file) {
-  if (file.empty()) {
+inline std::string ReadFile(const std::string &filepath) {
+  if (filepath.empty()) {
     return {};
   }
-  std::fstream fin(file);
-  const auto start = fin.tellg();
-  fin.seekg(0, std::ios::end);
-  const auto length = fin.tellg() - start;
-  fin.seekg(start);
+  std::ifstream file(filepath);
+  if (file.fail()) {
+      return {};
+  }
+  const auto start = file.tellg();
+  file.seekg(0, std::ios::end);
+  const auto length = file.tellg() - start;
+  file.seekg(start);
   std::string r;
   r.resize(length, ' ');
-  fin.read(&*r.begin(), length);
-  fin.close();
+  file.read(&*r.begin(), length);
+  file.close();
   return r;
+}
+
+std::string JavascriptReplacements() {
+  std::ostringstream stream;
+  for (const JsInfo &info : javascript_includes) {
+    if (info.url == nullptr) {
+      break;
+    }
+    const std::string &script = ReadFile(info.filepath);
+    if (script.empty()) {
+      stream << "<script type=\"text/javascript\" src=\"" << info.url
+             << "\"></script>\n";
+    } else {
+      stream << "<script type=\"text/javascript\">" << script << "</script>\n";
+    }
+  }
+  return stream.str();
 }
 }
 
@@ -412,9 +433,7 @@ void HTMLReporter::Finalize() {
       html_base, {{"CHART", output.chart},
                   {"CONTEXT", context_output},
                   {"DIV", output.div},
-                  {"HIGHCHART_MORE", ReadFile("@CMAKE_HIGHSTOCK_MORE_PATH@")},
-                  {"HIGHCHART", ReadFile("@CMAKE_HIGHSTOCK_PATH@")},
-                  {"JQUERY", ReadFile("@CMAKE_JQUERY_PATH@")},
+                  {"JAVASCRIPT_REPLACEMENTS", JavascriptReplacements()},
                   {"TITLE", "Benchmark"}});
 }
 
