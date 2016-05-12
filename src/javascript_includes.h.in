@@ -1,0 +1,9 @@
+namespace benchmark {
+namespace {
+struct JsInfo {
+  const char *const filepath;
+  const char *const url;
+};
+static const JsInfo javascript_includes[] = {@CMAKE_JAVASCRIPT_INCLUDES@ {nullptr, nullptr}};
+}  // unnamed namespace
+}  // namespace benchmark
