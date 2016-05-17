@@ -181,7 +181,7 @@ std::string ReplaceTags(
     return std::move(boilerplate);
 }
 
-using Run = BenchmarkReporter::Run;
+typedef BenchmarkReporter::Run Run;
 
 struct ChartIt {
   const char *const chart_title;
