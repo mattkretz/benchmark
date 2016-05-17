@@ -203,7 +203,7 @@ static const std::array<ChartIt, HTMLReporter::NumberOfPresentations> charts = {
         return std::to_string(
             fixup_time(mean.real_accumulated_time, mean.iterations));
       },
-      [](const Run &mean, const Run &stddev) {
+      [](const Run &mean, const Run &stddev) -> std::string {
         const double value =
             fixup_time(mean.real_accumulated_time, mean.iterations);
         const double deviation =
@@ -217,7 +217,7 @@ static const std::array<ChartIt, HTMLReporter::NumberOfPresentations> charts = {
         return std::to_string(
             fixup_time(mean.cpu_accumulated_time, mean.iterations));
       },
-      [](const Run &mean, const Run &stddev) {
+      [](const Run &mean, const Run &stddev) -> std::string {
         const double value =
             fixup_time(mean.cpu_accumulated_time, mean.iterations);
         const double deviation =
@@ -228,7 +228,7 @@ static const std::array<ChartIt, HTMLReporter::NumberOfPresentations> charts = {
      {"Items per second", "items/s",
       [](const Run &mean) { return mean.items_per_second > 0; },
       [](const Run &mean) { return std::to_string(mean.items_per_second); },
-      [](const Run &mean, const Run &stddev) {
+      [](const Run &mean, const Run &stddev) -> std::string {
         const double value = mean.items_per_second;
         const double deviation = stddev.items_per_second;
         return std::to_string(value - deviation) + ',' +
@@ -237,7 +237,7 @@ static const std::array<ChartIt, HTMLReporter::NumberOfPresentations> charts = {
      {"Bytes per second", "B/s",
       [](const Run &mean) { return mean.bytes_per_second > 0; },
       [](const Run &mean) { return std::to_string(mean.bytes_per_second); },
-      [](const Run &mean, const Run &stddev) {
+      [](const Run &mean, const Run &stddev) -> std::string {
         const double value = mean.bytes_per_second;
         const double deviation = stddev.bytes_per_second;
         return std::to_string(value - deviation) + ',' +
