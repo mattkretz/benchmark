@@ -69,6 +69,8 @@ DEFINE_string(benchmark_format, "console",
               "The format to use for console output. Valid values are "
               "'console', 'json', 'csv', or 'html'.");
 
+DEFINE_string(benchmark_title, "Benchmark", "The title used in HTML reports.");
+
 DEFINE_bool(color_print, true, "Enables colorized logging.");
 
 DEFINE_int32(v, 0, "The level of verbose logging to output");
@@ -881,6 +883,8 @@ void RunMatchingBenchmarks(const std::string& spec,
   context.cpu_scaling_enabled = CpuScalingEnabled();
   context.name_field_width = name_field_width;
 
+  context.title = FLAGS_benchmark_title;
+
   if (reporter->ReportContext(context)) {
     for (const auto& benchmark : benchmarks) {
       RunBenchmark(benchmark, reporter);
@@ -939,6 +943,7 @@ void PrintUsageAndExit() {
           "          [--benchmark_min_time=<min_time>]\n"
           "          [--benchmark_repetitions=<num_repetitions>]\n"
           "          [--benchmark_format=<console|json|csv|html>]\n"
+          "          [--benchmark_title=<string>]\n"
           "          [--color_print={true|false}]\n"
           "          [--v=<verbosity>]\n");
   exit(0);
@@ -958,6 +963,8 @@ void ParseCommandLineFlags(int* argc, char** argv) {
                        &FLAGS_benchmark_repetitions) ||
         ParseStringFlag(argv[i], "benchmark_format",
                         &FLAGS_benchmark_format) ||
+        ParseStringFlag(argv[i], "benchmark_title",
+                        &FLAGS_benchmark_title) ||
         ParseBoolFlag(argv[i], "color_print",
                        &FLAGS_color_print) ||
         ParseInt32Flag(argv[i], "v", &FLAGS_v)) {

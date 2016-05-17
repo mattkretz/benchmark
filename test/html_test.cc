@@ -34,7 +34,7 @@ void compare(T x, T y, const std::string &x_string, const std::string &y_string,
 
 int main() {
   try {
-    benchmark::BenchmarkReporter::Context context = {1, 1234., true, 12};
+    benchmark::BenchmarkReporter::Context context = {1, 1234., true, 12, "Benchmark"};
     std::vector<benchmark::BenchmarkReporter::Run> runs;
     runs.resize(2);
     runs[0].benchmark_name = "TestHTML";
