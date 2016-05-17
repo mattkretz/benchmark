@@ -37,6 +37,8 @@ class BenchmarkReporter {
 
     // The number of chars in the longest benchmark name.
     size_t name_field_width;
+
+    std::string title;
   };
 
   struct Run {
@@ -179,6 +181,7 @@ class HTMLReporter : public BenchmarkReporter {
   ChartOutput BarChartOutput(Presentation p);
   std::string ReplaceHTMLSpecialChars(const std::string& label) const;
 
+  std::string title;
   std::string context_output;
 
   struct ChartData {

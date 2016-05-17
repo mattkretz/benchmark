@@ -289,6 +289,7 @@ std::string JavascriptReplacements() {
 }
 
 bool HTMLReporter::ReportContext(const Context &context) {
+  title = context.title;
   std::ostringstream stream;
   stream << "<div>Run on (" << context.num_cpus << " X " << context.mhz_per_cpu
          << " MHz CPU" << ((context.num_cpus > 1) ? "s" : "") << ")<br/>"
@@ -434,7 +435,7 @@ void HTMLReporter::Finalize() {
                   {"CONTEXT", context_output},
                   {"DIV", output.div},
                   {"JAVASCRIPT_REPLACEMENTS", JavascriptReplacements()},
-                  {"TITLE", "Benchmark"}});
+                  {"TITLE", title}});
 }
 
 std::string HTMLReporter::ReplaceHTMLSpecialChars(
