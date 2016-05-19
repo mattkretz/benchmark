@@ -152,6 +152,7 @@ BENCHMARK(BM_test)->Unit(benchmark::kMillisecond);
 #include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <sstream>
 #include <string>
 
 #include "macros.h"
@@ -159,7 +160,32 @@ BENCHMARK(BM_test)->Unit(benchmark::kMillisecond);
 namespace benchmark {
 class BenchmarkReporter;
 
-void Initialize(int* argc, char** argv);
+static std::string CompilerString()
+{
+    std::ostringstream s;
+    s <<
+#ifdef __INTEL_COMPILER
+        "ICC " << __INTEL_COMPILER_BUILD_DATE
+#elif defined(__clang__)
+#if defined(__APPLE__)
+        "Apple Clang "
+#else
+        "LLVM Clang "
+#endif
+      << __clang_major__ << '.' << __clang_minor__ << '.' << __clang_patchlevel__
+#elif defined(__GNUC__)
+        "GCC " << __GNUC__ << '.' << __GNUC_MINOR__ << '.' << __GNUC_PATCHLEVEL__
+#elif defined(_MSC_VER)
+        "MSVC ",
+        (s << _MSC_FULL_VER, s.str())
+#else
+        "unknown compiler"
+#endif
+        ;
+    return s.str();
+}
+
+void Initialize(int* argc, char** argv, const char* compiler = CompilerString().c_str());
 
 // Otherwise, run all benchmarks specified by the --benchmark_filter flag,
 // and exit after running the benchmarks.

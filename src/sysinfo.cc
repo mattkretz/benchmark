@@ -52,6 +52,7 @@ namespace {
 std::once_flag cpuinfo_init;
 double cpuinfo_cycles_per_second = 1.0;
 int cpuinfo_num_cpus = 1;  // Conservative guess
+std::string cpuinfo_model_string;
 std::mutex cputimens_mutex;
 
 #if !defined BENCHMARK_OS_MACOSX
@@ -136,6 +137,9 @@ void InitializeSystemInfo() {
   bool saw_bogo = false;
   long max_cpu_id = 0;
   int num_cpus = 0;
+  int model_id = -1;
+  int family_id = -1;
+  std::string vendor_id;
   line[0] = line[1] = '\0';
   size_t chars_read = 0;
   do {  // we'll exit when the last read didn't read anything
@@ -186,9 +190,107 @@ void InitializeSystemInfo() {
         if (id_str[1] != '\0' && *err == '\0' && max_cpu_id < cpu_id)
           max_cpu_id = cpu_id;
       }
+    } else if (strncmp(line, "model name", sizeof("model name") - 1) == 0) {
+      // handle this one only to disambiguate "model" below.
+    } else if (strncmp(line, "model", sizeof("model") - 1) == 0) {
+      const char* id_str = strchr(line, ':');
+      if (id_str) {
+        model_id = strtol(id_str + 1, &err, 10);
+      }
+    } else if (strncmp(line, "cpu family", sizeof("cpu family") - 1) == 0) {
+      const char* id_str = strchr(line, ':');
+      if (id_str) {
+        family_id = strtol(id_str + 1, &err, 10);
+      }
+    } else if (strncmp(line, "vendor_id", sizeof("vendor_id") - 1) == 0) {
+      const char* id_str = strchr(line, ':');
+      if (id_str) {
+        vendor_id = id_str + 2;
+      }
     }
   } while (chars_read > 0);
   close(fd);
+
+  std::ostringstream s;
+  if (vendor_id == "GenuineIntel") {
+    s << "Intel ";
+    if (family_id == 6) {
+      switch (model_id) {
+      case 0x4E:
+      case 0x5E:
+        s << "Skylake";
+        break;
+      case 0x3D:
+      case 0x47:
+      case 0x56:
+        s << "Broadwell";
+        break;
+      case 0x3C:
+      case 0x45:
+      case 0x46:
+      case 0x3F:
+        s << "Haswell";
+        break;
+      case 0x3A:
+      case 0x3E:
+        s << "Ivy Bridge";
+        break;
+      case 0x2A:
+      case 0x2D:
+        s << "Sandy Bridge";
+        break;
+      case 0x25:
+      case 0x2C:
+      case 0x2F:
+        s << "Westmere";
+        break;
+      case 0x1A:
+      case 0x1E:
+      case 0x1F:
+      case 0x2E:
+        s << "Nehalem";
+        break;
+      case 0x17:
+      case 0x1D:
+        s << "Enhanced Core";
+        break;
+      case 0x0F:
+        s << "Core";
+        break;
+      default:
+        s << family_id << ':' << model_id;
+        break;
+      }
+    } else {
+      s << family_id << ':' << model_id;
+    }
+  } else if (vendor_id == "AuthenticAMD") {
+    s << "AMD ";
+    switch (family_id) {
+    case 22:
+      s << "16h";
+      break;
+    case 21:
+      s << (model_id < 2 ? "Bulldozer" : "Piledriver");
+      break;
+    case 20:
+      s << "14h";
+      break;
+    case 18:
+    case 16:
+      s << "Barcelona";
+      break;
+    case 15:
+      s << "K8";
+      break;
+    default:
+      s << family_id << ':' << model_id;
+      break;
+    }
+  } else {
+    s << vendor_id << ' ' << family_id << ':' << model_id;
+  }
+  cpuinfo_model_string = s.str();
 
   if (!saw_mhz) {
     if (saw_bogo) {
@@ -386,6 +488,11 @@ double CyclesPerSecond(void) {
 int NumCPUs(void) {
   std::call_once(cpuinfo_init, InitializeSystemInfo);
   return cpuinfo_num_cpus;
+}
+
+std::string CPUModel() {
+  std::call_once(cpuinfo_init, InitializeSystemInfo);
+  return cpuinfo_model_string;
 }
 
 // The ""'s catch people who don't pass in a literal for "str"

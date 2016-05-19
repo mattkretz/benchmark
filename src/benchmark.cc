@@ -29,6 +29,7 @@
 #include <condition_variable>
 #include <iostream>
 #include <memory>
+#include <sstream>
 #include <thread>
 
 #include "benchmark_util.h"
@@ -69,8 +70,6 @@ DEFINE_string(benchmark_format, "console",
               "The format to use for console output. Valid values are "
               "'console', 'json', 'csv', or 'html'.");
 
-DEFINE_string(benchmark_title, "Benchmark", "The title used in HTML reports.");
-
 DEFINE_bool(color_print, true, "Enables colorized logging.");
 
 DEFINE_int32(v, 0, "The level of verbose logging to output");
@@ -79,7 +78,7 @@ DEFINE_int32(v, 0, "The level of verbose logging to output");
 namespace benchmark {
 
 namespace internal {
-
+static std::string context_title = {};
 void UseCharPointer(char const volatile*) {}
 
 // NOTE: This is a dummy "mutex" type used to denote the actual mutex
@@ -882,8 +881,7 @@ void RunMatchingBenchmarks(const std::string& spec,
 
   context.cpu_scaling_enabled = CpuScalingEnabled();
   context.name_field_width = name_field_width;
-
-  context.title = FLAGS_benchmark_title;
+  context.title = internal::context_title;
 
   if (reporter->ReportContext(context)) {
     for (const auto& benchmark : benchmarks) {
@@ -943,7 +941,6 @@ void PrintUsageAndExit() {
           "          [--benchmark_min_time=<min_time>]\n"
           "          [--benchmark_repetitions=<num_repetitions>]\n"
           "          [--benchmark_format=<console|json|csv|html>]\n"
-          "          [--benchmark_title=<string>]\n"
           "          [--color_print={true|false}]\n"
           "          [--v=<verbosity>]\n");
   exit(0);
@@ -963,8 +960,6 @@ void ParseCommandLineFlags(int* argc, char** argv) {
                        &FLAGS_benchmark_repetitions) ||
         ParseStringFlag(argv[i], "benchmark_format",
                         &FLAGS_benchmark_format) ||
-        ParseStringFlag(argv[i], "benchmark_title",
-                        &FLAGS_benchmark_title) ||
         ParseBoolFlag(argv[i], "color_print",
                        &FLAGS_color_print) ||
         ParseInt32Flag(argv[i], "v", &FLAGS_v)) {
@@ -985,6 +980,14 @@ void ParseCommandLineFlags(int* argc, char** argv) {
   }
 }
 
+void SetContextTitle(const char* name, const char* compiler_id)
+{
+  const char* basename = std::strrchr(name, '/');
+  std::ostringstream s;
+  s << (basename ? basename + 1 : name) << ": " << CPUModel() << ", " << compiler_id;
+  context_title = s.str();
+}
+
 Benchmark* RegisterBenchmarkInternal(Benchmark* bench) {
     std::unique_ptr<Benchmark> bench_ptr(bench);
     BenchmarkFamilies* families = BenchmarkFamilies::GetInstance();
@@ -994,8 +997,10 @@ Benchmark* RegisterBenchmarkInternal(Benchmark* bench) {
 
 } // end namespace internal
 
-void Initialize(int* argc, char** argv) {
+void Initialize(int* argc, char** argv, const char* compiler)
+{
   internal::ParseCommandLineFlags(argc, argv);
+  internal::SetContextTitle(argv[0], compiler);
   internal::SetLogLevel(FLAGS_v);
   // TODO remove this. It prints some output the first time it is called.
   // We don't want to have this ouput printed during benchmarking.

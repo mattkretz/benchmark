@@ -148,8 +148,8 @@ static const char *const html_base =
     "       </script>\n"
     "   </head>\n"
     "   <body>\n"
-    "${DIV}"
     "${CONTEXT}"
+    "${DIV}"
     "   </body>\n"
     "</html>";
 
@@ -291,7 +291,8 @@ std::string JavascriptReplacements() {
 bool HTMLReporter::ReportContext(const Context &context) {
   title = context.title;
   std::ostringstream stream;
-  stream << "<div>Run on (" << context.num_cpus << " X " << context.mhz_per_cpu
+  stream << "<h1>" << context.title << "</h1>\n";
+  stream << "<p>Run on (" << context.num_cpus << " X " << context.mhz_per_cpu
          << " MHz CPU" << ((context.num_cpus > 1) ? "s" : "") << ")<br/>"
          << LocalDateTimeString() << "<br/>";
   if (context.cpu_scaling_enabled) {
@@ -308,7 +309,7 @@ bool HTMLReporter::ReportContext(const Context &context) {
   std::cerr << "***WARNING*** Library was built as DEBUG. Timings may be "
                "affected.\n";
 #endif
-  stream << "</div>";
+  stream << "</p>";
   context_output = stream.str();
   return true;
 }
